@@ -1,0 +1,44 @@
+#!/bin/bash -eu
+echo ""
+echo "Which VM do you want to delete?"
+VMLIST=($(virsh --connect qemu:///system list --all |tail -n +3|awk '{print $2}'|sort))
+echo "---------------------------------"
+x=0
+for i in ${VMLIST[@]}; do
+  echo ${VMLIST[x]}
+  x=$x+1
+done
+echo "---------------------------------"
+echo -n "Enter the VM name: "
+read VM ; export VM=$VM
+echo "---------------------------------"
+#Chedk if exist
+for i in "${VMLIST[@]}"; do
+    if [ "$i" == "$VM" ] ; then
+       FOUND=1
+       break 
+    else
+       FOUND=0
+    fi
+done
+if [ $FOUND -eq 0 ] ; then
+       echo "VM has NOT been found"
+       exit
+fi
+VMRUNNING=($(virsh --connect qemu:///system list |tail -n +3|awk '{print $2}'))
+for i in "${VMRUNNING[@]}"; do
+   if [ "$i" == "$VM" ] ; then
+      echo "Powerring off "$VM
+      virsh --connect qemu:///system destroy $VM  
+   fi
+done
+DISKS=($(virsh --connect qemu:///system dumpxml $VM |grep img |sed "s:<source file='::g" |sed "s:'/>::g"))
+
+virsh --connect qemu:///system undefine $VM
+
+for i in "${DISKS[@]}" ; do
+   rm -f "$i"
+   echo "File $i is deleted"
+done
+echo "VM $VM is deleted"
+echo ""

@@ -1,0 +1,132 @@
+#!/bin/bash -eu
+DIR=$(cd `dirname $0` && pwd)
+echo ""
+echo -n "Enter the Linux VM name: "
+read VMNAME ; export VMNAME=$VMNAME
+
+echo -n "Enter Physical CPUs (Example: 0 2 3): "
+read CPUS ; export CPUS=($CPUS)
+
+CPUSET=""
+for i in ${CPUS[@]}; do
+   CPUSET=$CPUSET$i","
+done
+
+echo -n "Enter the VM RAM (in MB): "
+read VMRAM ; export VMRAM=$VMRAM
+
+echo -n "Enter the disk pool (img img2 img3): "
+read DISKPOOL ; export DISKPOOL=$DISKPOOL
+
+echo -n "Enter the system disk size (in GB): "
+read DISKSIZE ; export DISKSIZE=$DISKSIZE
+
+echo -n "Enter the OS Variant (centos6 centos7 fedoraWS fedora debian ubuntu16 ubuntu16WS ubuntu17): "
+read OSVARIANT ; export OSVARIANT=$OSVARIANT
+
+echo -n "Connect to network (homenet or labnet): "
+read NETWORK ; export NETWORK=$NETWORK
+
+echo ""
+echo "====================================="
+echo "Summary:"
+echo "VM name: "$VMNAME
+echo "CPUSET: "$CPUSET
+echo "Number of CPUs: "${#CPUS[@]}
+echo "RAM: "$VMRAM"MB"
+echo "Disk pool: "$DISKPOOL
+echo "Disk size "$DISKSIZE"GB"
+echo "OS: "$OSVARIANT
+echo "Network: "$NETWORK
+echo ""
+read -p "Continue? (y/n)" -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+    echo "Creating VM..."
+else
+    exit
+fi
+
+sed -i "s/network  --bootproto=dhcp --device=eth0.*/network  --bootproto=dhcp --device=eth0 --hostname $VMNAME/g" $DIR/ks/ks.cfg 
+
+case $OSVARIANT in
+  centos6)
+   OSVARIANT="centos6.5"
+   KS="ks.cfg"
+   SERVERNAME=${VMNAME}
+   PATHTOINSTALL="http://mirror.centos.org/centos-6/6/os/x86_64"
+   ;;
+
+  centos7)
+   OSVARIANT="centos6.5"
+   KS="ks.cfg"
+   PATHTOINSTALL="http://mirror.centos.org/centos-7/7/os/x86_64"
+   ;;
+
+  fedora)                   #broken TODO - probably kernel parameter
+   OSVARIANT="fedora22"
+   KS="ks.cfg"
+   PATHTOINSTALL="http://mirror.digmia.com/fedora/releases/27/Server/x86_64/os"
+   ;;
+
+  fedoraWS)                 #broken TODO - probably kernel parameter
+   OSVARIANT="fedora22"
+   KS="ksws.cfg"
+   PATHTOINSTALL="http://ftp.upjs.sk/pub/fedora/linux/releases/27/Workstation/x86_64/os/"
+   ;;
+
+  debian)
+   OSVARIANT="debian8"      #TODO debian kickstart file
+   KS="ks.cfg"
+   PATHTOINSTALL="http://ftp.at.debian.org/debian/dists/stable/main/installer-amd64/"
+   ;;
+
+  ubuntu14)
+   OSVARIANT="ubuntu14.04"  #TODO debian kickstart file
+   KS="ks.cfg"
+   PATHTOINSTALL="http://archive.ubuntu.com/ubuntu/dists/trusty/main/installer-amd64/"
+   ;;
+
+  ubuntu16)                
+   OSVARIANT="ubuntu15.04"  #TODO debian kickstart file
+   KS="ks.cfg"
+   PATHTOINSTALL="http://archive.ubuntu.com/ubuntu/dists/xenial/main/installer-amd64/"
+   ;;
+
+  ubuntu16WS)         
+   OSVARIANT="ubuntu15.04"  #TODO debian kickstart file
+   KS="ksws.cfg"
+   PATHTOINSTALL="http://archive.ubuntu.com/ubuntu/dists/xenial/main/installer-amd64/"
+   ;;
+
+  ubuntu17)                 #TODO debian kickstart file
+   OSVARIANT="ubuntu15.04"
+   KS="ks.cfg"
+   PATHTOINSTALL="http://archive.ubuntu.com/ubuntu/dists/zesty/main/installer-amd64/"
+   ;;
+esac
+
+
+sudo virt-install --connect qemu:///system \
+--name $VMNAME \
+--ram $VMRAM \
+--cpuset $CPUSET \
+--vcpus ${#CPUS[@]} \
+--disk /VMs/$DISKPOOL/$VMNAME.qcow2,size="$DISKSIZE",format=qcow2,bus=virtio,cache=none \
+--network network=$NETWORK \
+--os-type linux \
+--os-variant $OSVARIANT \
+--nographics \
+--hvm \
+--accelerate \
+--console pty,target_type=serial \
+--location $PATHTOINSTALL \
+--initrd-inject=$DIR/ks/$KS \
+--extra-args="ks=file:$KS SERVERNAME=$VMNAME console=tty0 console=ttyS0,115200n8 serial"
+
+
+# set DNS record
+# TODO
+echo "Post-installation is done."
+
